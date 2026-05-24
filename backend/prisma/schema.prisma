@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  passwordHash String
+  role         Role            @default(VIEWER)
+  createdAt    DateTime        @default(now())
+  watchlist    WatchlistItem[]
+  progress     Progress[]
+}
+
+model WatchlistItem {
+  id      String      @id @default(cuid())
+  userId  String
+  mediaId String
+  status  WatchStatus @default(PLAN)
+  addedAt DateTime    @default(now())
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media   Media       @relation(fields: [mediaId], references: [id])
+
+  @@unique([userId, mediaId])
+}
+
+model Progress {
+  id          String   @id @default(cuid())
+  userId      String
+  mediaId     String
+  seasonEp    String?
+  positionSec Int      @default(0)
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media       Media    @relation(fields: [mediaId], references: [id])
+
+  @@unique([userId, mediaId])
+}
+
+model Media {
+  id        String          @id @default(cuid())
+  tmdbId    String          @unique
+  imdbId    String?
+  type      MediaType
+  title     String
+  poster    String?
+  metadata  Json
+  links     ProviderLink[]
+  watchlist WatchlistItem[]
+  progress  Progress[]
+}
+
+model Provider {
+  id        String         @id @default(cuid())
+  name      String
+  pluginKey String
+  config    String
+  enabled   Boolean        @default(true)
+  createdBy String
+  links     ProviderLink[]
+}
+
+model ProviderLink {
+  id               String   @id @default(cuid())
+  mediaId          String
+  providerId       String
+  deepLinkTemplate String
+  availability     Json
+  media            Media    @relation(fields: [mediaId], references: [id])
+  provider         Provider @relation(fields: [providerId], references: [id])
+
+  @@unique([mediaId, providerId])
+}
+
+enum Role {
+  ADMIN
+  VIEWER
+}
+
+enum WatchStatus {
+  PLAN
+  WATCHING
+  DONE
+}
+
+enum MediaType {
+  MOVIE
+  SERIES
+}
