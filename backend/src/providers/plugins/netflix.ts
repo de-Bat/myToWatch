@@ -1,4 +1,4 @@
-import { register } from '../registry'
+import { register } from '../store'
 import type { MediaProvider, ProviderConfig, ProviderResult, Availability } from '../interface'
 import type { EpisodeRef } from '@mytowatch/shared'
 
