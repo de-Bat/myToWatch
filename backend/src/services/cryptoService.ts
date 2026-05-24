@@ -5,8 +5,9 @@ const IV_LENGTH = 12
 const TAG_LENGTH = 16
 
 function getKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY ?? ''
-  if (key.length < 32) throw new Error('ENCRYPTION_KEY must be at least 32 chars')
+  const key = process.env.ENCRYPTION_KEY
+  if (!key) throw new Error('ENCRYPTION_KEY environment variable not set')
+  if (key.length < 32) throw new Error('ENCRYPTION_KEY must be at least 32 characters')
   return Buffer.from(key.slice(0, 32), 'utf8')
 }
 
@@ -20,10 +21,13 @@ export function encrypt(plaintext: string): string {
 
 export function decrypt(ciphertext: string): string {
   const buf = Buffer.from(ciphertext, 'base64')
+  if (buf.length < IV_LENGTH + TAG_LENGTH) {
+    throw new Error('Invalid ciphertext: too short')
+  }
   const iv = buf.subarray(0, IV_LENGTH)
   const tag = buf.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH)
   const encrypted = buf.subarray(IV_LENGTH + TAG_LENGTH)
   const decipher = createDecipheriv(ALGORITHM, getKey(), iv)
   decipher.setAuthTag(tag)
-  return decipher.update(encrypted) + decipher.final('utf8')
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8')
 }
