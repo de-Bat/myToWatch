@@ -44,3 +44,8 @@ export async function getProviderConfig(id: string): Promise<Record<string, stri
   const provider = await prisma.provider.findUniqueOrThrow({ where: { id } })
   return JSON.parse(decrypt(provider.config))
 }
+
+export async function getProviderWithKey(id: string): Promise<{ pluginKey: string }> {
+  const provider = await prisma.provider.findUniqueOrThrow({ where: { id } })
+  return { pluginKey: provider.pluginKey }
+}

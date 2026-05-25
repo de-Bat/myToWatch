@@ -1,7 +1,9 @@
+// backend/src/routes/providers.ts
 import { Router } from 'express'
 import { authenticate, AuthRequest } from '../middleware/auth'
 import { requireAdmin } from '../middleware/requireAdmin'
 import * as providerService from '../services/providerService'
+import { get as getPlugin } from '../providers/registry'
 
 export const providersRouter = Router()
 providersRouter.use(authenticate)
@@ -23,8 +25,36 @@ providersRouter.post('/', requireAdmin, async (req: AuthRequest, res) => {
 })
 
 providersRouter.patch('/:id', requireAdmin, async (req, res) => {
+  const { action, ...updateData } = req.body
+
+  // Handle test action: call plugin healthCheck
+  if (action === 'test') {
+    let dbConfig: Record<string, string>
+    let pluginKey: string
+    try {
+      const dbProvider = await providerService.getProviderWithKey(req.params.id)
+      pluginKey = dbProvider.pluginKey
+      dbConfig = await providerService.getProviderConfig(req.params.id)
+    } catch {
+      res.status(404).json({ error: 'Provider not found' }); return
+    }
+
+    const plugin = getPlugin(pluginKey)
+    if (!plugin) {
+      res.status(400).json({ error: `Unknown plugin: ${pluginKey}` }); return
+    }
+    if (!plugin.healthCheck) {
+      res.status(400).json({ error: `Plugin ${pluginKey} does not support health check` }); return
+    }
+
+    const result = await plugin.healthCheck(dbConfig)
+    res.json(result)
+    return
+  }
+
+  // Normal update (enabled, name, config)
   try {
-    const provider = await providerService.updateProvider(req.params.id, req.body)
+    const provider = await providerService.updateProvider(req.params.id, updateData)
     res.json(provider)
   } catch {
     res.status(500).json({ error: 'Internal server error' })

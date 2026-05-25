@@ -1,4 +1,5 @@
 import request from 'supertest'
+import { vi } from 'vitest'
 import { createApp } from '../src/app'
 
 const app = createApp()
@@ -88,5 +89,91 @@ describe('Providers (admin only)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ pluginKey: 'test' })
     expect(res.status).toBe(400)
+  })
+})
+
+describe('PATCH /providers/:id — test action', () => {
+  it('returns ok: true for Jellyfin plugin with healthCheck (mocked fetch)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ ServerName: 'TestJellyfin', Version: '10.9.0' }), { status: 200 }),
+    )
+
+    const token = await registerAdmin()
+    const create = await request(app)
+      .post('/providers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Jellyfin Test',
+        pluginKey: 'jellyfin',
+        config: { serverUrl: 'http://jf.test:8096', apiKey: 'key', jellyfinUserId: 'u1' },
+      })
+
+    const res = await request(app)
+      .patch(`/providers/${create.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'test' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
+    expect(typeof res.body.message).toBe('string')
+
+    vi.restoreAllMocks()
+  })
+
+  it('returns ok: false when Jellyfin healthCheck fails (mocked fetch rejection)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('ECONNREFUSED'))
+
+    const token = await registerAdmin()
+    const create = await request(app)
+      .post('/providers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Jellyfin Broken',
+        pluginKey: 'jellyfin',
+        config: { serverUrl: 'http://bad.host:8096', apiKey: 'key', jellyfinUserId: 'u1' },
+      })
+
+    const res = await request(app)
+      .patch(`/providers/${create.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'test' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(false)
+    expect(res.body.message).toContain('ECONNREFUSED')
+
+    vi.restoreAllMocks()
+  })
+
+  it('returns 400 for unknown pluginKey', async () => {
+    const token = await registerAdmin()
+    const create = await request(app)
+      .post('/providers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Mystery', pluginKey: 'unknown-plugin', config: {} })
+
+    const res = await request(app)
+      .patch(`/providers/${create.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'test' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toContain('Unknown plugin')
+  })
+
+  it('returns ok: true for Netflix plugin (always healthy, no config)', async () => {
+    const token = await registerAdmin()
+    const create = await request(app)
+      .post('/providers')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Netflix', pluginKey: 'netflix', config: {} })
+
+    const res = await request(app)
+      .patch(`/providers/${create.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'test' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
   })
 })
