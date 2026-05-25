@@ -30,7 +30,7 @@ export function TVSideNav() {
             key={item.href}
             onPress={() => router.push(item.href as Parameters<typeof router.push>[0])}
             hasTVPreferredFocus={idx === 0}
-            style={active ? { ...styles.item, ...styles.itemActive } : styles.item}
+            style={[styles.item, active && styles.itemActive]}
           >
             <Text style={styles.icon}>{item.icon}</Text>
             <Text style={[typography.body, active && styles.labelActive]}>{item.label}</Text>

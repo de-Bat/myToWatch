@@ -1,11 +1,11 @@
 // apps/mobile/src/components/FocusableItem.tsx
 import React, { useState, useCallback } from 'react'
-import { Pressable, PressableProps, StyleSheet, ViewStyle } from 'react-native'
+import { Pressable, PressableProps, StyleProp, StyleSheet, ViewStyle } from 'react-native'
 import { colors } from '../design/tokens'
 
 interface Props extends PressableProps {
-  style?: ViewStyle
-  focusedStyle?: ViewStyle
+  style?: StyleProp<ViewStyle>
+  focusedStyle?: StyleProp<ViewStyle>
   hasTVPreferredFocus?: boolean
 }
 
