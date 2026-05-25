@@ -25,6 +25,10 @@ export async function getById(id: string) {
   return prisma.media.findUnique({ where: { id } })
 }
 
+export async function getMediaByTmdbId(tmdbId: string) {
+  return prisma.media.findUnique({ where: { tmdbId } })
+}
+
 export async function getProviders(mediaId: string) {
   const links = await prisma.providerLink.findMany({
     where: { mediaId },
