@@ -15,7 +15,7 @@ progressRouter.post('/sync', async (req: AuthRequest, res) => {
   let synced = 0
 
   try {
-    // Find all ProviderLinks that belong to enabled providers
+    // Find ProviderLinks for media in the user's watchlist (enabled providers only)
     const links = await prisma.providerLink.findMany({
       include: {
         provider: true,
@@ -23,6 +23,7 @@ progressRouter.post('/sync', async (req: AuthRequest, res) => {
       },
       where: {
         provider: { enabled: true },
+        media: { watchlist: { some: { userId } } },
       },
     })
 

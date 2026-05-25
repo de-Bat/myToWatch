@@ -42,6 +42,11 @@ async function setup() {
     },
   })
 
+  // Add media to user's watchlist (required for sync user scoping)
+  await prisma.watchlistItem.create({
+    data: { userId, mediaId: media.id, status: 'WATCHING' },
+  })
+
   // Create a ProviderLink (simulating that availability was already checked)
   await prisma.providerLink.create({
     data: {
@@ -120,6 +125,11 @@ describe('POST /progress/sync', () => {
 
     const media = await prisma.media.create({
       data: { tmdbId: '550', type: 'MOVIE', title: 'Fight Club', metadata: {} },
+    })
+
+    // Add media to user's watchlist (required for sync user scoping)
+    await prisma.watchlistItem.create({
+      data: { userId, mediaId: media.id, status: 'PLAN' },
     })
 
     await prisma.providerLink.create({
