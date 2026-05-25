@@ -1,6 +1,6 @@
 # myToWatch — How To Run
 
-Four sections: [Backend Server](#1-backend-server), [Web Browser](#2-web-browser-api-only), [iOS Simulator / Device](#3-ios), [Android TV](#4-android-tv).
+Sections: [Backend Server](#1-backend-server), [Web Browser](#2-web-browser-api-only), [iOS](#3-ios), [Android TV](#4-android-tv), [Linux Server](#5-linux-server-self-hosted).
 
 ---
 
@@ -396,6 +396,288 @@ eas submit --platform android
 ```
 
 Play Store review is required. The app appears in the "Android TV" section automatically because of the `LEANBACK_LAUNCHER` intent filter in `app.json`.
+
+---
+
+## 5. Linux Server (self-hosted)
+
+Full instructions for running the backend on any Linux machine — Ubuntu/Debian home server, Raspberry Pi, VPS, NAS with Docker.
+
+---
+
+### 5a. Install dependencies
+
+```bash
+# Ubuntu / Debian / Raspberry Pi OS
+sudo apt-get update && sudo apt-get install -y \
+  curl git ca-certificates gnupg lsb-release
+
+# Node.js 20 (via NodeSource)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# pnpm
+npm install -g pnpm
+
+# Docker Engine (not Docker Desktop — this is the headless server version)
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER   # allow running docker without sudo
+newgrp docker                   # apply group change without logout
+```
+
+Verify:
+
+```bash
+node -v     # v20+
+pnpm -v     # 9+
+docker -v   # Docker version 25+
+docker compose version   # v2+
+```
+
+> On Raspberry Pi 4/5, use Raspberry Pi OS 64-bit (Bookworm). All steps are identical.
+
+---
+
+### 5b. Get the code
+
+```bash
+# Clone the repo
+git clone <your-repo-url> /opt/mytowatch
+cd /opt/mytowatch
+```
+
+Or copy from another machine:
+
+```bash
+# From your dev machine
+scp -r . user@server-ip:/opt/mytowatch
+```
+
+---
+
+### 5c. Configure environment
+
+```bash
+cd /opt/mytowatch
+cp backend/.env.example backend/.env
+nano backend/.env
+```
+
+Fill in all values:
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@db:5432/mytowatch"
+
+# Generate each secret — run on your server:
+# node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+JWT_SECRET="<32-char-random-hex>"
+JWT_REFRESH_SECRET="<32-char-random-hex>"
+ENCRYPTION_KEY="<32-char-random-hex>"
+
+# Free key at https://www.themoviedb.org/settings/api
+TMDB_API_KEY="<your-key>"
+
+NODE_ENV=production
+PORT=3000
+```
+
+> **Never commit `.env`.** It is gitignored. Store it only on the server.
+
+---
+
+### 5d. Start with Docker Compose
+
+```bash
+cd /opt/mytowatch
+docker compose up -d --build
+```
+
+- `--build` compiles the backend image (takes ~2 min first time)
+- `-d` runs in background (detached)
+- Postgres data persists in Docker volume `pgdata` across restarts
+
+Check it's running:
+
+```bash
+docker compose ps
+# NAME                STATUS
+# mytowatch-api-1     running
+# mytowatch-db-1      running
+
+curl http://localhost:3000/health
+# → {"ok":true}
+```
+
+View logs:
+
+```bash
+docker compose logs -f api    # backend logs, live
+docker compose logs -f db     # postgres logs
+```
+
+---
+
+### 5e. Auto-start on boot (systemd)
+
+Docker itself auto-starts on boot after `sudo systemctl enable docker`. To make the containers also start automatically, add `restart: always` to `docker-compose.yml`:
+
+```yaml
+# docker-compose.yml
+services:
+  api:
+    restart: always
+    # ... rest of config
+
+  db:
+    restart: always
+    # ... rest of config
+```
+
+Apply the change:
+
+```bash
+docker compose up -d   # recreates containers with new restart policy
+```
+
+Verify restart policy is set:
+
+```bash
+docker inspect mytowatch-api-1 | grep RestartPolicy -A3
+# "RestartPolicy": { "Name": "always", ... }
+```
+
+Now the backend survives server reboots with no manual intervention.
+
+---
+
+### 5f. Find server IP (for the app)
+
+```bash
+hostname -I | awk '{print $1}'
+# e.g. 192.168.1.50
+```
+
+Enter `http://192.168.1.50:3000` in the myToWatch app's onboarding screen.
+
+If your router supports it, assign a **static DHCP lease** to the server's MAC address so the IP never changes. Look for this in your router's admin panel under "DHCP reservations" or "Static IP".
+
+---
+
+### 5g. Expose via domain / reverse proxy (optional)
+
+To access from outside your home network, or to use HTTPS:
+
+**Install Caddy** (handles HTTPS certificates automatically via Let's Encrypt):
+
+```bash
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install caddy
+```
+
+Create `/etc/caddy/Caddyfile`:
+
+```
+# Replace with your actual domain pointing to this server's public IP
+mytowatch.yourdomain.com {
+    reverse_proxy localhost:3000
+}
+```
+
+Start Caddy:
+
+```bash
+sudo systemctl enable --now caddy
+```
+
+Caddy automatically provisions TLS certificates. Users enter `https://mytowatch.yourdomain.com` in the app onboarding — no port number needed.
+
+**DNS setup:** Point your domain's A record to the server's public IP. If your ISP gives you a dynamic IP, use a service like [DuckDNS](https://www.duckdns.org) (free) with a cron job to update it:
+
+```bash
+# /etc/cron.d/duckdns — update IP every 5 minutes
+*/5 * * * * root curl -s "https://www.duckdns.org/update?domains=mytowatch&token=<token>&ip=" > /dev/null 2>&1
+```
+
+---
+
+### 5h. Firewall (UFW)
+
+If UFW is active, open only the ports you need:
+
+```bash
+sudo ufw allow ssh        # keep SSH open or you'll lock yourself out
+sudo ufw allow 3000/tcp   # myToWatch API (LAN only — no reverse proxy)
+# OR if using Caddy:
+sudo ufw allow 80/tcp     # Caddy HTTP (for ACME challenge)
+sudo ufw allow 443/tcp    # Caddy HTTPS
+sudo ufw enable
+sudo ufw status
+```
+
+Do **not** expose port 5432 (Postgres) to the internet.
+
+---
+
+### 5i. Register admin account
+
+First user to register becomes ADMIN:
+
+```bash
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"strong-password"}'
+```
+
+---
+
+### 5j. Backup Postgres data
+
+The database lives in a Docker volume (`pgdata`). Backup to a file:
+
+```bash
+# Dump
+docker compose exec db pg_dump -U postgres mytowatch > backup-$(date +%Y%m%d).sql
+
+# Restore
+docker compose exec -T db psql -U postgres mytowatch < backup-20260525.sql
+```
+
+Automate with cron:
+
+```bash
+# /etc/cron.d/mytowatch-backup — daily at 3am
+0 3 * * * root cd /opt/mytowatch && docker compose exec -T db pg_dump -U postgres mytowatch > /opt/backups/mytowatch-$(date +\%Y\%m\%d).sql
+```
+
+---
+
+### 5k. Update the backend
+
+When you push new code:
+
+```bash
+cd /opt/mytowatch
+git pull
+docker compose up -d --build   # rebuilds image, zero manual steps
+```
+
+Migrations run automatically on container startup (the Dockerfile CMD runs `prisma migrate deploy` before starting the server).
+
+---
+
+### Common Linux commands
+
+| Task | Command |
+|---|---|
+| Stop server | `docker compose down` |
+| Stop + wipe DB | `docker compose down -v` |
+| View live logs | `docker compose logs -f api` |
+| Restart backend only | `docker compose restart api` |
+| Open Postgres shell | `docker compose exec db psql -U postgres mytowatch` |
+| Check disk usage | `docker system df` |
+| Free Docker space | `docker system prune` |
 
 ---
 
