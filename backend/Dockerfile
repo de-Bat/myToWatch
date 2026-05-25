@@ -9,6 +9,7 @@ COPY backend/package.json ./backend/
 RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
+RUN apk add --no-cache openssl
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml ./
 COPY --from=deps /app/node_modules ./node_modules
@@ -17,9 +18,11 @@ COPY --from=deps /app/backend/node_modules ./backend/node_modules
 COPY packages/shared ./packages/shared
 COPY backend ./backend
 RUN cd packages/shared && pnpm build
+RUN cd backend && node_modules/.bin/prisma generate
 RUN cd backend && npx tsc
 
 FROM base AS runner
+RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/node_modules ./node_modules
