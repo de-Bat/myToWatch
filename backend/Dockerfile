@@ -28,9 +28,10 @@ ENV NODE_ENV=production
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY backend/package.json ./backend/
+COPY backend/prisma ./prisma
 RUN pnpm install --frozen-lockfile --prod
+RUN backend/node_modules/.bin/prisma generate
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/backend/dist ./dist
-COPY --from=builder /app/backend/prisma ./prisma
+COPY --from=builder /app/backend/dist ./backend/dist
 EXPOSE 3000
-CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "backend/node_modules/.bin/prisma migrate deploy && node backend/dist/index.js"]
