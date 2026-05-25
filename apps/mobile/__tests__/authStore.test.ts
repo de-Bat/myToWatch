@@ -8,7 +8,7 @@ jest.mock('expo-secure-store', () => ({
 }))
 
 const mockFetch = jest.fn()
-global.fetch = mockFetch
+globalThis.fetch = mockFetch as typeof fetch
 
 beforeEach(() => {
   mockFetch.mockReset()

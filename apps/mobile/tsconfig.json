@@ -4,6 +4,7 @@
     "strict": true,
     "paths": {
       "@mytowatch/shared": ["../../packages/shared/src/index.ts"]
-    }
+    },
+    "types": ["jest"]
   }
 }

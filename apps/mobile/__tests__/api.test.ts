@@ -9,7 +9,7 @@ jest.mock('expo-secure-store', () => ({
 }))
 
 const mockFetch = jest.fn()
-global.fetch = mockFetch
+globalThis.fetch = mockFetch as typeof fetch
 
 function makeResponse(body: unknown, status = 200) {
   return {
