@@ -34,7 +34,7 @@ export async function getProviders(mediaId: string) {
     where: { mediaId },
     include: { provider: { select: { id: true, name: true } } },
   })
-  return links.map((l) => ({
+  return links.map((l: (typeof links)[number]) => ({
     providerId: l.providerId,
     providerName: l.provider.name,
     deepLinkTemplate: l.deepLinkTemplate,
