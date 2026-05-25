@@ -6,5 +6,5 @@ module.exports = {
   moduleNameMapper: {
     '@mytowatch/shared': '<rootDir>/../../packages/shared/src/index.ts',
   },
-  setupFilesAfterFramework: ['@testing-library/react-native/extend-expect'],
+  setupFilesAfterEnv: ['@testing-library/react-native/extend-expect'],
 }
